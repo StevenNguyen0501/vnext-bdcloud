@@ -1,13 +1,23 @@
-name: pbl6
-description: A new Flutter project.
-publish_to: 'none'
-version: 0.1.0
+name: demo_urine
+description: "A new Flutter project."
+publish_to: 'none' # Remove this line if you wish to publish to pub.dev
+version: 1.0.0+1
 
 environment:
-  sdk: '>=3.1.3 <4.0.0'
+  sdk: '>=3.3.0 <4.0.0'
+
 
 dependencies:
   flutter:
+    sdk: flutter
+  universal_html: ^2.0.6
+
+
+ 
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
     sdk: flutter
   http: ^1.1.0
   http_parser: ^4.0.2
@@ -18,13 +28,21 @@ dependencies:
   permission_handler: ^11.3.0
   dio: ^5.4.1
 
-dev_dependencies:
-  flutter_test:
-    sdk: flutter
-  flutter_lints: ^3.0.1
+  flutter_lints: ^3.0.0
+
 
 flutter:
-  uses-material-design: true
-  assets:
-    - icon.png
 
+
+  uses-material-design: true
+  fonts:
+    - family: Times New Roman
+      fonts:
+        - asset: fonts/times_new_roman.ttf
+  assets:
+    - assets/image.png
+    - assets/shibachibi2.png
+    - assets/abcd.jpg
+
+
+  

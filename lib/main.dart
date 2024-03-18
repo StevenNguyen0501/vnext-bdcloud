@@ -1,95 +1,57 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:pbl6/image.dart';
-import 'package:pbl6/list_view.dart';
+import 'package:demo_urine/start.dart';
 
 void main() {
   runApp(MaterialApp(
-    debugShowCheckedModeBanner:true ,
+    debugShowCheckedModeBanner: false, // Tắt hiển thị chữ debug
     home: MainApp(),
   ));
 }
 
-class MainApp extends StatelessWidget {
-  const MainApp({Key? key});
+class MainApp extends StatefulWidget {
+  const MainApp({Key? key}) : super(key: key);
+  @override
+  _MainAppState createState() => _MainAppState();
+}
+
+class _MainAppState extends State<MainApp> {
+  @override
+  void initState() {
+    super.initState();
+    // Sau 5 giây, chuyển đến trang mới nếu không có tương tác
+    Timer(Duration(seconds: 2), () {
+      Navigator.push(
+        context,
+        MaterialPageRoute(builder: (context) => MyApp()),
+      );
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      home: Scaffold(
-        backgroundColor: Colors.lightBlueAccent,
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                SizedBox(height: 60), // Adjusted space above the icon
-                Align(
-                  alignment: Alignment.topCenter,
-                  child: Image.asset(
-                    'icon.png', // Adjust the image file name based on your actual file name
-                    height: 150,
-                  ),
-                ),
-                SizedBox(height: 20), // Adjusted space between icon and text
-                Align(
-                  alignment: Alignment.center,
-                  child: Text(
-                    '\n\ Unire Test',
-                    style: TextStyle(
-                        fontSize: 42,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.white),
-                    textAlign: TextAlign.center,
-                  ),
-                ),
-                Spacer(), // Takes up remaining space between text and button
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => MyWidget(),
-                      ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  ),
-                  child: Text(
-                    'Start',
-                    style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.lightBlueAccent),
-                  ),
-                ),
-                SizedBox(height: 10,),
-                ElevatedButton(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => List_View_Result(),
-                      ),
-                    );
-                  },
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-                  ),
-                  child: Text(
-                    'history',
-                    style: TextStyle(
-                        fontSize: 26,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.lightBlueAccent),
-                  ),
-                ),
-                SizedBox(height: 60), // Adjusted space below the button
-              ],
+    return Scaffold( // Thay MaterialApp bằng Scaffold
+      body: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Align(
+            alignment: Alignment.center,
+            child: Image.asset(
+              'shibachibi2.png', // Điều chỉnh tên tệp hình ảnh dựa trên tên thực tế của tệp của bạn
+              height: 300,
             ),
           ),
-        ),
+          SizedBox(
+            height: 50,
+          ),
+          Text(
+            'Urine Test App',
+            style: TextStyle(
+              fontFamily: 'Times New Roman',
+              fontSize: 50.0,
+            ),
+          ),
+        ],
       ),
     );
   }
