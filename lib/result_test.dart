@@ -52,14 +52,10 @@ class _MyHomePageState extends State<PageResult> {
                           borderRadius: BorderRadius.circular(30),
                         ),
                         
-                        child: Column(
-                          children: [
-                            ClipRRect(
+                        child: ClipRRect(
                               borderRadius: BorderRadius.circular(10),
                               child: _buildImage(),
                             ),
-                          ],
-                        ),
                       ),
                       SizedBox(height: 20),
                     ],
@@ -101,16 +97,12 @@ class _MyHomePageState extends State<PageResult> {
         ),
         margin: const EdgeInsets.symmetric(vertical: 10),
         padding: const EdgeInsets.all(10),
-        child: Column(
-          children: [
-            ClipRRect(
+        child: ClipRRect(
               borderRadius: BorderRadius.circular(10),
               child: Image.memory(
                uint8List,
               ),
             ),
-          ],
-        ),
       );
     } else {
       return Text(

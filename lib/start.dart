@@ -48,11 +48,16 @@ class _MyAppState extends State<MyApp> {
     if (imageUrl == null) return;
 
     try {
+      String originalString = imageUrl.toString();
+      int commaIndex = originalString.indexOf(',');
+      String resultString = originalString.substring(commaIndex + 1).trim();
+      print(resultString); // In ra: "đoạn text sau dấu phẩy"
+
       final response = await http.post(
         Uri.parse('http://192.85.4.149:8000/process_image_Ciede20001'),
         body: jsonEncode(
           {
-            "imageBase64": imageUrl,
+            "imageBase64": resultString,
             "petName": "THINHNPPP",
             "userName": "THINHABCsD",
             "userEmail": "THINHNPPP",
