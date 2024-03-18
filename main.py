@@ -385,21 +385,21 @@ def analyze_urine_test_cie(urine_colors):
 #
 #     return result2
 
-ALLOWED_EXTENSIONS = [".jpg", ".png", ".jpeg"]
+# ALLOWED_EXTENSIONS = [".jpg", ".png", ".jpeg"]
 
-def check_username(userName):
-    dynamodb = boto3.resource('dynamodb',
-                              aws_access_key_id='AKIA47CRWLV57NUYSDTM',
-                              aws_secret_access_key='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',
-                              region_name='ap-southeast-1')
-
-    # Chọn bảng DynamoDB để làm việc
-    table = dynamodb.Table('dev-db-buddycloud-detailresults')
-    response = table.scan(
-        FilterExpression=boto3.dynamodb.conditions.Attr('userName').eq(userName)
-    )
-    items = response['Items']
-    return len(items) > 0
+# def check_username(userName):
+#     dynamodb = boto3.resource('dynamodb',
+#                               aws_access_key_id='AKIA47CRWLV57NUYSDTM',
+#                               aws_secret_access_key='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',
+#                               region_name='ap-southeast-1')
+#
+#     # Chọn bảng DynamoDB để làm việc
+#     table = dynamodb.Table('dev-db-buddycloud-detailresults')
+#     response = table.scan(
+#         FilterExpression=boto3.dynamodb.conditions.Attr('userName').eq(userName)
+#     )
+#     items = response['Items']
+#     return len(items) > 0
 @app.post("/process_image_Ciede20001/")
 async def process_image(image_data: ImageData):
     base64_data = image_data.imageBase64#.split(",")[1]
@@ -436,8 +436,8 @@ async def process_image(image_data: ImageData):
     # Lưu hình ảnh
     image.save(saved_image_path1, format="PNG")
     # Kiểm tra sự tồn tại của userName
-    if check_username(image_data.userName):
-        return {"error": "Tên người dùng đã tồn tại. Vui lòng chọn một tên người dùng khác."}
+    # if check_username(image_data.userName):
+    #     return {"error": "Tên người dùng đã tồn tại. Vui lòng chọn một tên người dùng khác."}
     dynamodb, table = connect_to_dynamodb()
     # Thực hiện phép quét (scan) để lấy số lượng mục trong bảng
     response = table.scan(Select='COUNT')
