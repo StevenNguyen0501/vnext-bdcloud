@@ -6,7 +6,6 @@ from io import BytesIO
 from datetime import datetime
 import boto3
 from PIL import Image
-from tomlkit.items import Key
 
 from detect import run
 import math
@@ -386,8 +385,7 @@ def analyze_urine_test_cie(urine_colors):
 #
 #     return result2
 
-# Danh sách các phần mở rộng tệp cho phép
-ALLOWED_EXTENSIONS = [".jpg", ".jpeg", ".png"]
+ALLOWED_EXTENSIONS = [".jpg", ".png", ".jpeg"]
 
 def check_username(userName):
     dynamodb = boto3.resource('dynamodb',
@@ -402,10 +400,9 @@ def check_username(userName):
     )
     items = response['Items']
     return len(items) > 0
-
 @app.post("/process_image_Ciede20001/")
 async def process_image(image_data: ImageData):
-    base64_data = image_data.imageBase64                  #.split(",")[1]
+    base64_data = image_data.imageBase64#.split(",")[1]
     binary_data = base64.b64decode(base64_data)
     temp_image_path = "file_image_tmp.jpg"
     image = Image.open(BytesIO(binary_data))
@@ -428,7 +425,7 @@ async def process_image(image_data: ImageData):
     # Xử lý hình ảnh với mô hình và trả về màu của nước tiểu
     urine_colors, im0 = run(source=temp_image_path)
     result = analyze_urine_test_cie(urine_colors)
-
+    print('im0', im0)
     image = Image.fromarray(im0)
     # Đường dẫn thư mục để lưu hình ảnh
     folder1_path = 'detectedImageURL'
@@ -438,17 +435,16 @@ async def process_image(image_data: ImageData):
     saved_image_path1 = os.path.join(folder1_path, image_filename)
     # Lưu hình ảnh
     image.save(saved_image_path1, format="PNG")
-    # # Kiểm tra sự tồn tại của userName
+    # Kiểm tra sự tồn tại của userName
     if check_username(image_data.userName):
         return {"error": "Tên người dùng đã tồn tại. Vui lòng chọn một tên người dùng khác."}
     dynamodb, table = connect_to_dynamodb()
-    response = table.query(
-        Select='COUNT',
-        ScanIndexForward=False,  # Sắp xếp theo ID giảm dần
-        Limit=1  # Chỉ cần lấy 1 item đầu tiên (ID lớn nhất)
-    )
-    # Lấy ID lớn nhất và tăng lên 1 để sử dụng cho ID_counter mới
-    ID_counter = response['Items'][0]['ID'] + 1 if response['Count'] > 0 else 1
+    # Thực hiện phép quét (scan) để lấy số lượng mục trong bảng
+    response = table.scan(Select='COUNT')
+    # Lấy số lượng mục hiện có trong bảng
+    item_count = response['Count']
+    # Nếu không có mục nào trong bảng, ID_counter sẽ được khởi tạo là 1, ngược lại sẽ là số lượng mục hiện có + 1
+    ID_counter = 1 if item_count == 0 else item_count + 1
     userID = str(ID_counter) + image_data.userName
     # Thêm mục mới vào bảng
     table.put_item(
@@ -467,10 +463,13 @@ async def process_image(image_data: ImageData):
             "detectedImageURL": saved_image_path1
         }
     )
+
+    ID_counter +=1
     # Xóa hình ảnh tạm thời sau khi đã xử lý
     os.remove(temp_image_path)
     # Tạo hình ảnh từ mảng Numpy
     image = Image.fromarray(im0.astype('uint8'))
+
     # Tạo chuỗi base64 từ hình ảnh
     buffer = io.BytesIO()
     image.save(buffer, format='JPEG')
