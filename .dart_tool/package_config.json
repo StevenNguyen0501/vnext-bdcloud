@@ -20,6 +20,12 @@
       "languageVersion": "2.12"
     },
     {
+      "name": "charcode",
+      "rootUri": "file:///Users/quocvvb/.pub-cache/hosted/pub.dev/charcode-1.3.1",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
+    },
+    {
       "name": "clock",
       "rootUri": "file:///Users/quocvvb/.pub-cache/hosted/pub.dev/clock-1.1.1",
       "packageUri": "lib/",
@@ -36,6 +42,18 @@
       "rootUri": "file:///Users/quocvvb/.pub-cache/hosted/pub.dev/cross_file-0.3.4+1",
       "packageUri": "lib/",
       "languageVersion": "3.3"
+    },
+    {
+      "name": "csslib",
+      "rootUri": "file:///Users/quocvvb/.pub-cache/hosted/pub.dev/csslib-1.0.0",
+      "packageUri": "lib/",
+      "languageVersion": "2.19"
+    },
+    {
+      "name": "cupertino_icons",
+      "rootUri": "file:///Users/quocvvb/.pub-cache/hosted/pub.dev/cupertino_icons-1.0.6",
+      "packageUri": "lib/",
+      "languageVersion": "2.19"
     },
     {
       "name": "dio",
@@ -110,6 +128,12 @@
       "languageVersion": "3.2"
     },
     {
+      "name": "html",
+      "rootUri": "file:///Users/quocvvb/.pub-cache/hosted/pub.dev/html-0.15.4",
+      "packageUri": "lib/",
+      "languageVersion": "2.19"
+    },
+    {
       "name": "http",
       "rootUri": "file:///Users/quocvvb/.pub-cache/hosted/pub.dev/http-1.2.1",
       "packageUri": "lib/",
@@ -147,9 +171,9 @@
     },
     {
       "name": "image_picker_ios",
-      "rootUri": "file:///Users/quocvvb/.pub-cache/hosted/pub.dev/image_picker_ios-0.8.9+1",
+      "rootUri": "file:///Users/quocvvb/.pub-cache/hosted/pub.dev/image_picker_ios-0.8.9+2",
       "packageUri": "lib/",
-      "languageVersion": "3.0"
+      "languageVersion": "3.2"
     },
     {
       "name": "image_picker_linux",
@@ -368,6 +392,18 @@
       "languageVersion": "2.17"
     },
     {
+      "name": "universal_html",
+      "rootUri": "file:///Users/quocvvb/.pub-cache/hosted/pub.dev/universal_html-2.2.4",
+      "packageUri": "lib/",
+      "languageVersion": "2.17"
+    },
+    {
+      "name": "universal_io",
+      "rootUri": "file:///Users/quocvvb/.pub-cache/hosted/pub.dev/universal_io-2.2.2",
+      "packageUri": "lib/",
+      "languageVersion": "2.17"
+    },
+    {
       "name": "vector_math",
       "rootUri": "file:///Users/quocvvb/.pub-cache/hosted/pub.dev/vector_math-2.1.4",
       "packageUri": "lib/",
@@ -398,13 +434,13 @@
       "languageVersion": "3.0"
     },
     {
-      "name": "pbl6",
+      "name": "demo_urine",
       "rootUri": "../",
       "packageUri": "lib/",
-      "languageVersion": "3.1"
+      "languageVersion": "3.3"
     }
   ],
-  "generated": "2024-03-13T02:17:16.705442Z",
+  "generated": "2024-03-18T02:11:07.503340Z",
   "generator": "pub",
   "generatorVersion": "3.3.0"
 }
