@@ -3,7 +3,9 @@ uvicorn
 opencv-python-headless
 Pillow
 torch  # Assuming ultralytics YOLO requires PyTorch
-ultralytics  # This might not be the correct package name; adjust based on where you get the YOLO module.
+# ultralytics  # This might not be the correct package name; adjust based on where you get the YOLO module.
 pandas
 scikit-learn
 boto3
+git+https://github.com/trainyolo/YOLO-ONNX.git
+python-multipart

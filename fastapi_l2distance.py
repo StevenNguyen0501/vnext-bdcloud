@@ -4,9 +4,10 @@ from PIL import Image
 from fastapi import FastAPI, UploadFile, File, Form
 from pydantic import BaseModel
 import cv2
-from ultralytics import YOLO
-import os
-import pandas as pd
+from torch.mps import event
+# from ultralytics import YOLO
+# import os
+# import pandas as pd
 from pydantic import BaseModel
 
 import base64
@@ -14,6 +15,26 @@ from datetime import datetime
 import tempfile
 import os
 import boto3
+
+from yolo_onnx.yolov8_onnx import YOLOv8
+import json
+import base64
+from io import BytesIO
+
+class_names = {
+    0: 'Bilirubin',
+    1: 'Blood',
+    2: 'Glucose',
+    3: 'Ketone',
+    4: 'Leukocytes',
+    5: 'Nitrite',
+    6: 'Protein',
+    7: 'Specific',
+    8: 'Urobilinogen',
+    9: 'pH'
+}
+
+lst_classes = list(class_names.values())
 
 app = FastAPI()
 class ImageData(BaseModel):
@@ -34,37 +55,48 @@ class UrineColor(BaseModel):
     Specific: list
     Urobilinogen: list
     pH: list
+
+def visualize_result(results, img):
+    for result in results:
+        r = result["bbox"]
+        class_id = int(result["class_id"])
+        class_name = class_names[class_id]
+        cv2.rectangle(img, (r[0], r[1]), (r[2], r[3]), (0, 255, 0), 2)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        cv2.putText(img, class_name, (r[2] + 5, r[1] + 20), font, 0.5, (0, 238, 238), 1, cv2.LINE_AA)
+    return img
+
 def process_image_with_model1(img_path):
-    model = YOLO('last.pt')
-    model.export(format="onnx", dynamic=True)
-    results = model.predict(source=img_path, save=True, save_txt=True)  # save plotted images and txt
+  
+    model = YOLOv8('weight/last.onnx')
+    print("Model YOLOv8: ", model)
 
-    def visualize_result(results, img_path):
-        img = cv2.imread(img_path)  # Đọc hình ảnh để vẽ lên đó
-        for result in results:
-            boxes = result.boxes.cpu().numpy()  # Get boxes in numpy format
-            for box in boxes:
-                r = box.xyxy[0].astype(int)
-                class_id = int(box.cls[0])
-                class_name = model.names[class_id]
-                cv2.rectangle(img, (r[0], r[1]), (r[2], r[3]), (0, 255, 0), 2)
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                cv2.putText(img, class_name, (r[2] + 5, r[1] + 20), font, 0.5, (0, 238, 238), 1, cv2.LINE_AA)
-        return img
-
-    img_visualized = visualize_result(results, img_path)
-
-    # Processing for color extraction
-    xywh = [r.boxes.xywh for r in results]
-    xy = [c[:, :2] for c in xywh]
-    cls = [r.boxes.cls for r in results]
-    names_list = ['Bilirubin','Blood','Glucose','Ketone','Leukocytes','Nitrite','Protein','Gravity','Urobilinogen','pH']
-    result_dict = {}
-    for cl, xy_val in zip(cls, xy):
-        for c, xy_single in zip(cl.int(), xy_val):
-            result_dict[names_list[int(c)]] = xy_single.tolist()
+    app = FastAPI()
+    # infer result
+    img = Image.open(img_path)
+    results = model(img, size=640, conf_thres=0.3, iou_thres=0.5)
+    print("Results YOLOv8: ", results)
 
     image = cv2.imread(img_path)
+    img_visualized = visualize_result(results, image)
+    # cv2.imwrite('img_visualized.jpg', img_visualized)
+
+    # Processing for color extraction
+    xywh = [list(result["bbox"]) for result in results]
+    print('xywh: ', xywh)
+    print('type xywh: ', type(xywh))
+    xy = [[int(c[0]), int(c[1])] for c in xywh]
+    xy = list(xy)
+    print("xy: ", xy)
+    cls = [int(result["class_id"]) for result in results]
+    print("cls: ", cls)
+
+    result_dict = {}
+    for cl, xy_val in zip(cls, xy):
+        print(cl)
+        print(xy_val)
+        result_dict[lst_classes[int(cl)]] = xy_val
+
     urine_colors = {}
     for name, xy in result_dict.items():
         x, y = map(int, xy)
@@ -74,6 +106,7 @@ def process_image_with_model1(img_path):
     print(urine_colors)
 
     return img_visualized, urine_colors
+
 def analyze_urine_test(urine_colors):
     result = {}
 
@@ -90,10 +123,7 @@ def analyze_urine_test(urine_colors):
 
         return closest_color
 
-    test_indices = ['Bilirubin', 'Blood', 'Glucose', 'Ketone', 'Leukocytes', 'Nitrite', 'Protein', 'Gravity',
-                    'Urobilinogen', 'pH']
-
-    for index in test_indices:
+    for index in lst_classes:
         urine_color = urine_colors[index]
         if index == "Leukocytes":
             result[index] = find_closest_color(urine_color, {"NEGATIVE": [254, 248, 188],
@@ -377,80 +407,80 @@ def analyze_urine_test_cie(urine_colors):
                                                              "110": [136, 89, 41]})
 
     return result
-def analyze_urine_test_svm(urine_colors):
-    result = {}
-
-    def find_closest_color_svm(target, file_path, rgb_value):
-        # Importing the datasets
-        print('aaa', file_path)
-        datasets = pd.read_csv(file_path)
-        X = datasets.iloc[:, [0,1,2]].values
-        Y = datasets.iloc[:, 3].values
-
-        # Splitting the dataset into the Training set and Test set
-
-        from sklearn.model_selection import train_test_split
-        X_Train, X_Test, Y_Train, Y_Test = train_test_split(X, Y, test_size = 0.25, random_state = 0)
-
-        # Feature Scaling
-
-        from sklearn.preprocessing import StandardScaler
-        sc_X = StandardScaler()
-        X_Train = sc_X.fit_transform(X_Train)
-        X_Test = sc_X.transform(X_Test)
-
-        # Fitting the classifier into the Training set
-
-        from sklearn.svm import SVC
-        classifier = SVC(kernel = 'linear', random_state = 0)
-        # print(X_Train)
-        # print(Y_Train)
-        classifier.fit(X_Train, Y_Train)
-
-        # Predicting the test set results
-
-        Y_Pred = classifier.predict(X_Test)
-
-        # Making the Confusion Matrix
-
-        from sklearn.metrics import confusion_matrix
-        cm = confusion_matrix(Y_Test, Y_Pred)
-
-        # Chuẩn bị input mới
-        new_input = [rgb_value]  # Tạo input mới từ dữ liệu bạn cung cấp
-
-        # Tiêu chuẩn hóa input mới
-        new_input_scaled = sc_X.transform(new_input)
-
-        # Dự đoán kết quả cho input mới
-        predicted_class = classifier.predict(new_input_scaled)
-        return predicted_class[0]  #closest_color
-
-    test_indices = ['Bilirubin','Blood','Glucose','Ketone','Leukocytes','Nitrite','Protein','Specific','Urobilinogen','pH']
-    for index in test_indices:
-        urine_color = urine_colors[index]
-        if index == "Leukocytes":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
-        elif index == "Nitrite":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
-        elif index == "Urobilinogen":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
-        elif index == "Protein":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
-        elif index == "pH":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
-        elif index == "Blood":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
-        elif index == "Specific":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
-        elif index == "Ketone":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
-        elif index == "Bilirubin":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
-        elif index == "Glucose":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
-
-    return result
+# def analyze_urine_test_svm(urine_colors):
+#     result = {}
+#
+#     def find_closest_color_svm(target, file_path, rgb_value):
+#         # Importing the datasets
+#         print('aaa', file_path)
+#         datasets = pd.read_csv(file_path)
+#         X = datasets.iloc[:, [0,1,2]].values
+#         Y = datasets.iloc[:, 3].values
+#
+#         # Splitting the dataset into the Training set and Test set
+#
+#         from sklearn.model_selection import train_test_split
+#         X_Train, X_Test, Y_Train, Y_Test = train_test_split(X, Y, test_size = 0.25, random_state = 0)
+#
+#         # Feature Scaling
+#
+#         from sklearn.preprocessing import StandardScaler
+#         sc_X = StandardScaler()
+#         X_Train = sc_X.fit_transform(X_Train)
+#         X_Test = sc_X.transform(X_Test)
+#
+#         # Fitting the classifier into the Training set
+#
+#         from sklearn.svm import SVC
+#         classifier = SVC(kernel = 'linear', random_state = 0)
+#         # print(X_Train)
+#         # print(Y_Train)
+#         classifier.fit(X_Train, Y_Train)
+#
+#         # Predicting the test set results
+#
+#         Y_Pred = classifier.predict(X_Test)
+#
+#         # Making the Confusion Matrix
+#
+#         from sklearn.metrics import confusion_matrix
+#         cm = confusion_matrix(Y_Test, Y_Pred)
+#
+#         # Chuẩn bị input mới
+#         new_input = [rgb_value]  # Tạo input mới từ dữ liệu bạn cung cấp
+#
+#         # Tiêu chuẩn hóa input mới
+#         new_input_scaled = sc_X.transform(new_input)
+#
+#         # Dự đoán kết quả cho input mới
+#         predicted_class = classifier.predict(new_input_scaled)
+#         return predicted_class[0]  #closest_color
+#
+#     test_indices = ['Bilirubin','Blood','Glucose','Ketone','Leukocytes','Nitrite','Protein','Specific','Urobilinogen','pH']
+#     for index in test_indices:
+#         urine_color = urine_colors[index]
+#         if index == "Leukocytes":
+#             result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+#         elif index == "Nitrite":
+#             result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+#         elif index == "Urobilinogen":
+#             result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+#         elif index == "Protein":
+#             result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+#         elif index == "pH":
+#             result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+#         elif index == "Blood":
+#             result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+#         elif index == "Specific":
+#             result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+#         elif index == "Ketone":
+#             result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+#         elif index == "Bilirubin":
+#             result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+#         elif index == "Glucose":
+#             result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+#
+#     return result
 
 # @app.post("/process_image_L2distance/")
 # async def process_image(image_data: ImageData):
