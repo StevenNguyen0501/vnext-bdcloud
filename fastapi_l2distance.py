@@ -1,18 +1,27 @@
-import base64
-import io
+from io import BytesIO
 
-from fastapi import FastAPI, UploadFile, File
+from PIL import Image
+from fastapi import FastAPI, UploadFile, File, Form
 from pydantic import BaseModel
 import cv2
 from ultralytics import YOLO
-from typing import Dict
 import os
-import tempfile
 import pandas as pd
-from PIL import Image
+from pydantic import BaseModel
 
+import base64
+from datetime import datetime
+import tempfile
+import os
+import boto3
 
 app = FastAPI()
+class ImageData(BaseModel):
+    imageBase64: str
+    petName : str
+    userName :str
+    userEmail : str
+    userPhoneNumber : str
 
 class UrineColor(BaseModel):
     Bilirubin: list
@@ -25,8 +34,9 @@ class UrineColor(BaseModel):
     Specific: list
     Urobilinogen: list
     pH: list
-def process_image_with_model(img_path):
+def process_image_with_model1(img_path):
     model = YOLO('last.pt')
+    model.export(format="onnx", dynamic=True)
     results = model.predict(source=img_path, save=True, save_txt=True)  # save plotted images and txt
 
     def visualize_result(results, img_path):
@@ -39,20 +49,16 @@ def process_image_with_model(img_path):
                 class_name = model.names[class_id]
                 cv2.rectangle(img, (r[0], r[1]), (r[2], r[3]), (0, 255, 0), 2)
                 font = cv2.FONT_HERSHEY_SIMPLEX
-                font_scale = 0.5
-                font_thickness = 1
-                text_size = cv2.getTextSize(class_name, font, font_scale, font_thickness)[0]
-                text_x = r[2] + 5  # Adjust the x-coordinate to the right of the box
-                text_y = r[1] + text_size[1] + 5  # Adjust the y-coordinate for better positioning
-                cv2.putText(img, class_name, (text_x, text_y), font, font_scale, (0, 238, 238), font_thickness, cv2.LINE_AA)
+                cv2.putText(img, class_name, (r[2] + 5, r[1] + 20), font, 0.5, (0, 238, 238), 1, cv2.LINE_AA)
         return img
 
     img_visualized = visualize_result(results, img_path)
+
     # Processing for color extraction
     xywh = [r.boxes.xywh for r in results]
     xy = [c[:, :2] for c in xywh]
     cls = [r.boxes.cls for r in results]
-    names_list = ['Bilirubin','Blood','Glucose','Ketone','Leukocytes','Nitrite','Protein','Specific','Urobilinogen','pH']
+    names_list = ['Bilirubin','Blood','Glucose','Ketone','Leukocytes','Nitrite','Protein','Gravity','Urobilinogen','pH']
     result_dict = {}
     for cl, xy_val in zip(cls, xy):
         for c, xy_single in zip(cl.int(), xy_val):
@@ -84,7 +90,7 @@ def analyze_urine_test(urine_colors):
 
         return closest_color
 
-    test_indices = ['Bilirubin', 'Blood', 'Glucose', 'Ketone', 'Leukocytes', 'Nitrite', 'Protein', 'Specific',
+    test_indices = ['Bilirubin', 'Blood', 'Glucose', 'Ketone', 'Leukocytes', 'Nitrite', 'Protein', 'Gravity',
                     'Urobilinogen', 'pH']
 
     for index in test_indices:
@@ -128,7 +134,7 @@ def analyze_urine_test(urine_colors):
                                                              "SMALL(25)": [161, 156, 84],
                                                              "MODERATE(80)": [116, 156, 122],
                                                              "LARGE(200)": [69, 128, 108]})
-        elif index == "Specific":
+        elif index == "Gravity":
             result[index] = find_closest_color(urine_color, {"1.000": [2, 113, 126],
                                                              "1.005": [76, 117, 102],
                                                              "1.010": [123, 136, 105],
@@ -392,7 +398,9 @@ def analyze_urine_test_svm(urine_colors):
         sc_X = StandardScaler()
         X_Train = sc_X.fit_transform(X_Train)
         X_Test = sc_X.transform(X_Test)
+
         # Fitting the classifier into the Training set
+
         from sklearn.svm import SVC
         classifier = SVC(kernel = 'linear', random_state = 0)
         # print(X_Train)
@@ -444,76 +452,138 @@ def analyze_urine_test_svm(urine_colors):
 
     return result
 
+# @app.post("/process_image_L2distance/")
+# async def process_image(image_data: ImageData):
+#     base64_data = image_data.imageBase64.split(",")[1]
+#     binary_data = base64.b64decode(base64_data)
+#     temp_image_path = "file_image_tmp.jpg"
+#     image = Image.open(BytesIO(binary_data))
+#     image.save(temp_image_path)
+#     # Xử lý hình ảnh với mô hình và trả về màu của nước tiểu
+#     img_visualized, urine_colors = process_image_with_model1(temp_image_path)
+#     result = analyze_urine_test(urine_colors)
+#     print('ssssss', result)
+#     # Chuyển đổi ảnh đã được xử lý thành dạng Base64
+#     with open(temp_image_path, "rb") as image_file:
+#         img1_base64 = base64.b64encode(image_file.read()).decode("utf-8")
+#     # Chuyển đổi ảnh đã được xử lý thành dạng Base64
+#     _, buffer = cv2.imencode('.jpg', img_visualized)
+#     img_base64 = base64.b64encode(buffer).decode('utf-8')
+#
+#
+#     dynamodb = boto3.resource('dynamodb',
+#                               aws_access_key_id='AKIA47CRWLV57NUYSDTM',
+#                               aws_secret_access_key='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',
+#                               region_name='ap-southeast-1')
+#
+#     # Chọn bảng DynamoDB để làm việc
+#     table = dynamodb.Table('dev-db-buddycloud-detailresults')
+#
+#     # Lấy thời gian hiện tại và định dạng theo đúng định dạng 'YYYY-MM-DD HH:MM:SS'
+#     current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+#
+#     # Thực hiện phép quét (scan) để lấy số lượng mục trong bảng
+#     response = table.scan(Select='COUNT')
+#
+#     # Lấy số lượng mục hiện có trong bảng
+#     item_count = response['Count']
+#
+#     # Nếu không có mục nào trong bảng, ID_counter sẽ được khởi tạo là 1, ngược lại sẽ là số lượng mục hiện có + 1
+#     ID_counter = 1 if item_count == 0 else item_count + 1
+#
+#     # Thêm mục mới vào bảng
+#     table.put_item(
+#         Item={
+#             "ID": str(ID_counter),
+#             "userID": str(ID_counter),
+#             "userName": image_data.userName,
+#             "petName": image_data.petName,
+#             "petID": str(ID_counter),
+#             "userPhoneNumber": image_data.userPhoneNumber,
+#             "userEmail": image_data.userEmail,
+#             "timestamp": current_datetime,
+#             "resultsID": str(ID_counter),
+#             "resultsDetail": result,
+#             "rawImageURL": img1_base64,  # Thay đổi giá trị tại đây
+#             "detectedImageURL": img_base64
+#         }
+#     )
+#
+#     ID_counter +=1
+#     # Xóa hình ảnh tạm thời sau khi đã xử lý
+#     os.remove(temp_image_path)
+#
+#     return result
+
+ALLOWED_EXTENSIONS = [".jpg", ".png", ".jpeg"]
 @app.post("/process_image_L2distance/")
-async def process_image(file: UploadFile = File(...)):
+async def process_image(userName: str = Form(...),
+                        petName: str = Form(...),
+                        userPhoneNumber: str = Form(...),
+                        userEmail: str = Form(...),
+                        file: UploadFile = File(...)):
+    filename, file_extension = os.path.splitext(file.filename)
+    if file_extension.lower() not in ALLOWED_EXTENSIONS:
+        return {"error": f"File extension {file_extension} is not allowed."}
+
     contents = await file.read()
 
     # Tạo tệp tạm thời và ghi nội dung hình ảnh vào đó
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_image:
+    with tempfile.NamedTemporaryFile(delete=False, suffix=file_extension) as temp_image:
         temp_image_path = temp_image.name
         temp_image.write(contents)
-
     # Xử lý hình ảnh với mô hình và trả về màu của nước tiểu
-    img_visualized, urine_colors = process_image_with_model(temp_image_path)
-    image_pil = Image.fromarray(img_visualized)  # Chuyển đổi numpy array thành đối tượng Image
-    buffered = io.BytesIO()
-    image_pil.save(buffered, format="PNG")
-    image_bytes = buffered.getvalue()
-    # Encode bytes as base64
-    base64_image = base64.b64encode(image_bytes).decode('utf-8')
-    result = analyze_urine_test_svm(urine_colors)
+    img_visualized, urine_colors = process_image_with_model1(temp_image_path)
+    result = analyze_urine_test(urine_colors)
+    print('ssssss', result)
+    # Chuyển đổi ảnh đã được xử lý thành dạng Base64
+    with open(temp_image_path, "rb") as image_file:
+        img1_base64 = base64.b64encode(image_file.read()).decode("utf-8")
+    # Chuyển đổi ảnh đã được xử lý thành dạng Base64
+    _, buffer = cv2.imencode('.jpg', img_visualized)
+    img_base64 = base64.b64encode(buffer).decode('utf-8')
 
+
+    dynamodb = boto3.resource('dynamodb',
+                              aws_access_key_id='AKIA47CRWLV57NUYSDTM',
+                              aws_secret_access_key='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',
+                              region_name='ap-southeast-1')
+
+    # Chọn bảng DynamoDB để làm việc
+    table = dynamodb.Table('dev-db-buddycloud-detailresults')
+
+    # Lấy thời gian hiện tại và định dạng theo đúng định dạng 'YYYY-MM-DD HH:MM:SS'
+    current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+
+    # Thực hiện phép quét (scan) để lấy số lượng mục trong bảng
+    response = table.scan(Select='COUNT')
+
+    # Lấy số lượng mục hiện có trong bảng
+    item_count = response['Count']
+
+    # Nếu không có mục nào trong bảng, ID_counter sẽ được khởi tạo là 1, ngược lại sẽ là số lượng mục hiện có + 1
+    ID_counter = 1 if item_count == 0 else item_count + 1
+
+    # Thêm mục mới vào bảng
+    table.put_item(
+        Item={
+            "ID": str(ID_counter),
+            "userID": str(ID_counter),
+            "userName": userName,
+            "petName": petName,
+            "petID": str(ID_counter),
+            "userPhoneNumber": userPhoneNumber,
+            "userEmail": userEmail,
+            "timestamp": current_datetime,
+            "resultsID": str(ID_counter),
+            "resultsDetail": result,
+            "rawImageURL": img1_base64,  # Thay đổi giá trị tại đây
+            "detectedImageURL": img_base64
+        }
+    )
+
+    ID_counter +=1
     # Xóa hình ảnh tạm thời sau khi đã xử lý
     os.remove(temp_image_path)
-    responce = {"img_base64":base64_image}
-    result["img_base64"] = base64_image
-    response = result
-    return response
-@app.post("/process_image_Ciede2000/")
-async def process_image(file: UploadFile = File(...)):
-    contents = await file.read()
 
-    # Tạo tệp tạm thời và ghi nội dung hình ảnh vào đó
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_image:
-        temp_image_path = temp_image.name
-        temp_image.write(contents)
-
-    # Xử lý hình ảnh với mô hình và trả về màu của nước tiểu
-    img_visualized, urine_colors = process_image_with_model(temp_image_path)
-    image_pil = Image.fromarray(img_visualized)  # Chuyển đổi numpy array thành đối tượng Image
-    buffered = io.BytesIO()
-    image_pil.save(buffered, format="PNG")
-    image_bytes = buffered.getvalue()
-    # Encode bytes as base64
-    base64_image = base64.b64encode(image_bytes).decode('utf-8')
-    result = analyze_urine_test_svm(urine_colors)
-    # Xóa hình ảnh tạm thời sau khi đã xử lý
-    os.remove(temp_image_path)
-    responce = {"img_base64":base64_image}
-    result["img_base64"] = base64_image
-    response = result
-    return response
-@app.post("/process_image_SVM/")
-async def process_image(file: UploadFile = File(...)):
-    contents = await file.read()
-
-    # Tạo tệp tạm thời và ghi nội dung hình ảnh vào đó
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_image:
-        temp_image_path = temp_image.name
-        temp_image.write(contents)
-
-    # Xử lý hình ảnh với mô hình và trả về màu của nước tiểu
-    img_visualized, urine_colors = process_image_with_model(temp_image_path)
-    image_pil = Image.fromarray(img_visualized)  # Chuyển đổi numpy array thành đối tượng Image
-    buffered = io.BytesIO()
-    image_pil.save(buffered, format="PNG")
-    image_bytes = buffered.getvalue()
-    # Encode bytes as base64
-    base64_image = base64.b64encode(image_bytes).decode('utf-8')
-    result = analyze_urine_test_svm(urine_colors)
-    # Xóa hình ảnh tạm thời sau khi đã xử lý
-    os.remove(temp_image_path)
-    responce = {"img_base64":base64_image}
-    result["img_base64"] = base64_image
-    response = result
-    return response
+    return result

@@ -1,28 +1,34 @@
+from fastapi import FastAPI, HTTPException
 import boto3
 
+# Khởi tạo FastAPI
+app = FastAPI()
+# Kết nối với DynamoDB
+dynamodb = boto3.resource('dynamodb',
+                          aws_access_key_id='AKIA47CRWLV57NUYSDTM',
+                          aws_secret_access_key='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',
+                          region_name='ap-southeast-1')
 
-def scan_dynamodb_table(table_name):
-    # Kết nối với DynamoDB
-    dynamodb = boto3.resource('dynamodb',
-                              aws_access_key_id='AKIA47CRWLV57NUYSDTM',
-                              aws_secret_access_key='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',
-                              region_name='ap-southeast-1')
-    # Chọn bảng DynamoDB để làm việc
-    table = dynamodb.Table('dev-db-buddycloud-detailresults')
-
-    response = table.scan()
-    items = response['Items']
-
-    while 'LastEvaluatedKey' in response:
-        response = table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
-        items.extend(response['Items'])
-
-    return items
+# Chọn bảng DynamoDB để làm việc
+table = dynamodb.Table('dev-db-buddycloud-detailresults')
 
 
-table_name = 'dev-db-buddycloud-detailresults'  # Thay thế 'tên_bảng_của_bạn' bằng tên thực của bảng DynamoDB của bạn
-all_items = scan_dynamodb_table(table_name)
+@app.get("/item/{id}/{timestamp}")
+async def read_item(id: str, timestamp: str):
+    try:
+        # Truy vấn dữ liệu từ bảng
+        response = table.get_item(
+            Key={
+                'ID': id,
+                'timestamp': timestamp
+            }
+        )
+        item = response.get('Item')
 
-# In ra toàn bộ dữ liệu
-for item in all_items:
-    print(item)
+        # Kiểm tra xem item có tồn tại hay không
+        if not item:
+            raise HTTPException(status_code=404, detail="Item not found")
+
+        return item
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
