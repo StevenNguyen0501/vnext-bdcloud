@@ -44,6 +44,12 @@
       "languageVersion": "2.12"
     },
     {
+      "name": "fimber",
+      "rootUri": "file:///Users/quocvvb/.pub-cache/hosted/pub.dev/fimber-0.7.0",
+      "packageUri": "lib/",
+      "languageVersion": "2.12"
+    },
+    {
       "name": "flutter",
       "rootUri": "file:///Users/quocvvb/development/flutter/packages/flutter",
       "packageUri": "lib/",
@@ -206,7 +212,7 @@
       "languageVersion": "3.3"
     }
   ],
-  "generated": "2024-03-20T02:15:26.639826Z",
+  "generated": "2024-03-20T06:15:07.974713Z",
   "generator": "pub",
   "generatorVersion": "3.3.0"
 }
