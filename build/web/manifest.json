@@ -1,6 +1,6 @@
 {
-    "name": "demo_urine",
-    "short_name": "demo_urine",
+    "name": "camera_flutter",
+    "short_name": "camera_flutter",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

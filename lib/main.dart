@@ -1,57 +1,76 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:demo_urine/start.dart';
+import 'package:flutter_line_liff/flutter_line_liff.dart';
 
 void main() {
-  runApp(MaterialApp(
-    debugShowCheckedModeBanner: false, // Tắt hiển thị chữ debug
-    home: MainApp(),
-  ));
+  runApp(MyApp());
 }
 
-class MainApp extends StatefulWidget {
-  const MainApp({Key? key}) : super(key: key);
+class MyApp extends StatefulWidget {
   @override
-  _MainAppState createState() => _MainAppState();
+  _MyAppState createState() => _MyAppState();
 }
 
-class _MainAppState extends State<MainApp> {
+class _MyAppState extends State<MyApp> {
+  String? _userName = 'Loading...';
+  String? _userEmail = 'Loading...';
+  String? _profileImageURL = '';
+
   @override
   void initState() {
     super.initState();
-    // Sau 5 giây, chuyển đến trang mới nếu không có tương tác
-    Timer(Duration(seconds: 2), () {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (context) => MyApp()),
+    initializeLineLiff();
+  }
+
+  Future<void> initializeLineLiff() async {
+    try {
+      // Initialize LINE LIFF SDK
+      await FlutterLineLiff().init(
+        config: Config(liffId: '{2004033343-DxP6oEe7}'),
+        successCallback: () {},
+        errorCallback: (error) {
+          print('Error initializing LINE LIFF SDK: $error');
+        },
       );
-    });
+
+      // Wait for SDK to be ready
+      await FlutterLineLiff().ready;
+
+      // Get user's profile information
+      final Profile profile = await FlutterLineLiff().profile;
+      
+      // Update UI with user's information
+      setState(() {
+        _userName = profile.displayName;
+        _profileImageURL = profile.pictureUrl;
+      });
+    } catch (e) {
+      print('Error: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold( // Thay MaterialApp bằng Scaffold
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Align(
-            alignment: Alignment.center,
-            child: Image.asset(
-              'shibachibi2.png', // Điều chỉnh tên tệp hình ảnh dựa trên tên thực tế của tệp của bạn
-              height: 300,
-            ),
+    return MaterialApp(
+      home: Scaffold(
+        appBar: AppBar(
+          title: Text('LINE LIFF Example'),
+        ),
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: <Widget>[
+              _profileImageURL != null
+                  ? CircleAvatar(
+                      backgroundImage: NetworkImage(_profileImageURL!),
+                      radius: 50,
+                    )
+                  : CircularProgressIndicator(),
+              SizedBox(height: 20),
+              Text('Name: $_userName'),
+              Text('Email: $_userEmail'),
+            ],
           ),
-          SizedBox(
-            height: 50,
-          ),
-          Text(
-            'Urine Test App',
-            style: TextStyle(
-              fontFamily: 'Times New Roman',
-              fontSize: 50.0,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }
