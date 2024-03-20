@@ -1,0 +1,30 @@
+name: flutter_line_liff
+description: A Flutter package which provider an ability to use LINE LIFF SDK.
+version: 0.0.3
+homepage: https://www.github.com/JimmyTai/flutter_line_liff
+
+environment:
+  sdk: ">=2.16.0 <3.0.0"
+  flutter: ">=2.10.0"
+
+flutter:
+  plugin:
+    platforms:
+      web:
+        default_package: flutter_line_liff_web
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_line_liff_platform_interface: ^0.0.2
+  flutter_line_liff_web: ^0.0.2
+
+dev_dependencies:
+  flutter_driver:
+    sdk: flutter
+  flutter_test:
+    sdk: flutter
+  integration_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
