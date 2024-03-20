@@ -1,0 +1,21 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  urin-blood-test-inference
+Resources:
+  BuddyCloudFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: lambda-codebase/
+      Handler: app_lambda.main
+      Runtime: python3.9
+      MemorySize: 10240
+      Timeout: 60
+      FunctionUrlConfig:
+        AuthType: NONE
+
+Outputs:
+  BuddyCloudFunctionUrlEndpoint:
+      Description: "URL Endpoint"
+      Value:
+        Fn::GetAtt: BuddyCloudFunctionUrl.FunctionUrl
