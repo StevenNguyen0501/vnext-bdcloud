@@ -1,6 +1,0 @@
-images/*
-models/*
-runs/*
-weight/*
-*.jpg
-__pycache__/*

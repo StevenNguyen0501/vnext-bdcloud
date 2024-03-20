@@ -1,64 +1,71 @@
 import base64
 import io
-
 from fastapi import FastAPI, UploadFile, File
 from pydantic import BaseModel
 import cv2
-from ultralytics import YOLO
-from typing import Dict
+# from ultralytics import YOLO
+# from typing import Dict
 import os
-import tempfile
 import pandas as pd
 from PIL import Image
+from yolo_onnx.yolov8_onnx import YOLOv8
+import boto3
+from datetime import datetime
+from http.client import HTTPException
+from dotenv import load_dotenv, dotenv_values
+import json
 
-
+load_dotenv()
 app = FastAPI()
+class_names = {
+    0: 'Bilirubin',
+    1: 'Blood',
+    2: 'Glucose',
+    3: 'Ketone',
+    4: 'Leukocytes',
+    5: 'Nitrite',
+    6: 'Protein',
+    7: 'Specific',
+    8: 'Urobilinogen',
+    9: 'pH'
+}
 
-class UrineColor(BaseModel):
-    Bilirubin: list
-    Blood: list
-    Glucose: list
-    Ketone: list
-    Leukocytes: list
-    Nitrite: list
-    Protein: list
-    Specific: list
-    Urobilinogen: list
-    pH: list
+lst_classes = list(class_names.values())
+class ImageData(BaseModel):
+    imageBase64: str
+    petName: str
+    userName: str
+    userEmail: str
+    userPhoneNumber: str
+
+def visualize_result(results, img):
+    for result in results:
+        r = result["bbox"]
+        class_id = int(result["class_id"])
+        class_name = class_names[class_id]
+        cv2.rectangle(img, (r[0], r[1]), (r[2], r[3]), (0, 255, 0), 2)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        cv2.putText(img, class_name, (r[2] + 5, r[1] + 20), font, 0.5, (0, 238, 238), 1, cv2.LINE_AA)
+    return img
+
 def process_image_with_model(img_path):
-    model = YOLO('last.pt')
-    results = model.predict(source=img_path, save=True, save_txt=True)  # save plotted images and txt
+    model = YOLOv8('last.onnx')
+    # infer result
+    img = Image.open(img_path)
+    results = model(img, size=640, conf_thres=0.3, iou_thres=0.5)
+    image = cv2.imread(img_path)
+    img_visualized = visualize_result(results, image)
+    # cv2.imwrite('img_visualized.jpg', img_visualized)
 
-    def visualize_result(results, img_path):
-        img = cv2.imread(img_path)  # Đọc hình ảnh để vẽ lên đó
-        for result in results:
-            boxes = result.boxes.cpu().numpy()  # Get boxes in numpy format
-            for box in boxes:
-                r = box.xyxy[0].astype(int)
-                class_id = int(box.cls[0])
-                class_name = model.names[class_id]
-                cv2.rectangle(img, (r[0], r[1]), (r[2], r[3]), (0, 255, 0), 2)
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                font_scale = 0.5
-                font_thickness = 1
-                text_size = cv2.getTextSize(class_name, font, font_scale, font_thickness)[0]
-                text_x = r[2] + 5  # Adjust the x-coordinate to the right of the box
-                text_y = r[1] + text_size[1] + 5  # Adjust the y-coordinate for better positioning
-                cv2.putText(img, class_name, (text_x, text_y), font, font_scale, (0, 238, 238), font_thickness, cv2.LINE_AA)
-        return img
-
-    img_visualized = visualize_result(results, img_path)
     # Processing for color extraction
-    xywh = [r.boxes.xywh for r in results]
-    xy = [c[:, :2] for c in xywh]
-    cls = [r.boxes.cls for r in results]
-    names_list = ['Bilirubin','Blood','Glucose','Ketone','Leukocytes','Nitrite','Protein','Specific','Urobilinogen','pH']
+    xywh = [list(result["bbox"]) for result in results]
+    xy = [[int(c[0]), int(c[1])] for c in xywh]
+    xy = list(xy)
+    cls = [int(result["class_id"]) for result in results]
     result_dict = {}
     for cl, xy_val in zip(cls, xy):
-        for c, xy_single in zip(cl.int(), xy_val):
-            result_dict[names_list[int(c)]] = xy_single.tolist()
+        result_dict[lst_classes[int(cl)]] = xy_val
 
-    image = cv2.imread(img_path)
     urine_colors = {}
     for name, xy in result_dict.items():
         x, y = map(int, xy)
@@ -68,97 +75,7 @@ def process_image_with_model(img_path):
     print(urine_colors)
 
     return img_visualized, urine_colors
-def analyze_urine_test(urine_colors):
-    result = {}
 
-    def find_closest_color(target, color_dict):
-        min_distance = float('inf')
-        closest_color = None
-
-        for key, value in color_dict.items():
-            print(target, value)
-            distance = sum((a - b) ** 2 for a, b in zip(target, value))
-            if distance < min_distance:
-                min_distance = distance
-                closest_color = key
-
-        return closest_color
-
-    test_indices = ['Bilirubin', 'Blood', 'Glucose', 'Ketone', 'Leukocytes', 'Nitrite', 'Protein', 'Specific',
-                    'Urobilinogen', 'pH']
-
-    for index in test_indices:
-        urine_color = urine_colors[index]
-        if index == "Leukocytes":
-            result[index] = find_closest_color(urine_color, {"NEGATIVE": [254, 248, 188],
-                                                             "TRACE(15)": [229, 218, 174],
-                                                             "SMALL(75)": [206, 157, 149],
-                                                             "MODERATE(125)": [166, 120, 153],
-                                                             "LARGE(500)": [110, 83, 124]})
-        elif index == "Nitrite":
-            result[index] = find_closest_color(urine_color, {"NEGATIVE": [253, 250, 222],
-                                                             "POSITIVE1": [251, 220, 218],
-                                                             "POSITIVE2": [247, 181, 200],
-                                                             "POSITIVE3": [238, 78, 130]})
-        elif index == "Urobilinogen":
-            result[index] = find_closest_color(urine_color, {"NORMAL(32)": [254, 211, 174],
-                                                             "NORMAL(16)": [248, 168, 133],
-                                                             "32": [243, 131, 140],
-                                                             "64": [230, 111, 128],
-                                                             "128": [230, 78, 130]})
-        elif index == "Protein":
-            result[index] = find_closest_color(urine_color, {"NEGATIVE": [222, 229, 125],
-                                                             "TRACE": [187, 215, 106],
-                                                             "0.3": [172, 212, 130],
-                                                             "1.0": [119, 189, 151],
-                                                             "3.0": [94, 178, 169],
-                                                             ">=20": [0, 148, 149]})
-        elif index == "pH":
-            result[index] = find_closest_color(urine_color, {"5.0": [245, 139, 79],
-                                                             "6.0": [249, 165, 85],
-                                                             "6.5": [253, 195, 109],
-                                                             "7.0": [208, 189, 98],
-                                                             "7.5": [136, 148, 85],
-                                                             "8.0": [86, 173, 145],
-                                                             "8.5": [0, 127, 129]})
-        elif index == "Blood":
-            result[index] = find_closest_color(urine_color, {"NEGATIVE": [250, 174, 76],
-                                                             "TRACE(NON-HEMOLYZED)": [250, 284, 77],
-                                                             "TRACE(10)": [207, 161, 65],
-                                                             "SMALL(25)": [161, 156, 84],
-                                                             "MODERATE(80)": [116, 156, 122],
-                                                             "LARGE(200)": [69, 128, 108]})
-        elif index == "Specific":
-            result[index] = find_closest_color(urine_color, {"1.000": [2, 113, 126],
-                                                             "1.005": [76, 117, 102],
-                                                             "1.010": [123, 136, 105],
-                                                             "1.015": [155, 141, 58],
-                                                             "1.020": [175, 161, 52],
-                                                             "1.025": [197, 167, 48],
-                                                             "1.030": [210, 171, 43]})
-        elif index == "Ketone":
-            result[index] = find_closest_color(urine_color, {"NEGATIVE": [251, 188, 149],
-                                                             "TRACE(0.5)": [246, 158, 137],
-                                                             "SMALL(1.5)": [243, 131, 140],
-                                                             "MODERATE(4.0)": [201, 88, 116],
-                                                             "LARGE1(8.0)": [150, 58, 102],
-                                                             "LARGE2(16.0)": [120, 41, 90]})
-        elif index == "Bilirubin":
-            result[index] = find_closest_color(urine_color, {"NEGATIVE1": [253, 250, 222],
-                                                             "NEGATIVE2": [253, 223, 144],
-                                                             "SMALL(17)": [251, 187, 131],
-                                                             "MODERATE(50)": [208, 146, 136],
-                                                             "LARGE(100)": [171, 127, 131]})
-        elif index == "Glucose":
-            result[index] = find_closest_color(urine_color, {"NEGATIVE1": [111, 203, 220],
-                                                             "NEGATIVE2": [141, 208, 187],
-                                                             "TRACE(5)": [152, 207, 148],
-                                                             "15": [139, 171, 106],
-                                                             "30": [164, 129, 67],
-                                                             "60": [157, 105, 37],
-                                                             "110": [136, 89, 41]})
-
-    return result
 def rgb2lab(inputColor):
 
     num = 0
@@ -282,6 +199,7 @@ def CIEDE2000(Lab_1, Lab_2):
 
     dE_00 = math.sqrt(f_L**2 + f_C**2 + f_H**2 + R_T * f_C * f_H)
     return dE_00
+
 def analyze_urine_test_cie(urine_colors):
     result = {}
 
@@ -298,85 +216,42 @@ def analyze_urine_test_cie(urine_colors):
       return closest_color
 
     test_indices = ['Bilirubin','Blood','Glucose','Ketone','Leukocytes','Nitrite','Protein','Specific','Urobilinogen','pH']
-
+    # List of variable names
+    variable_names = [
+        "LEUKOCYTES", "NITRITE", "UROBILINOGEN", "PROTEIN", "PH",
+        "BLOOD", "GRAVITY", "KETONE", "BILIRUBIN", "GLUCOSE"
+    ]
+    # Deserialize environment variables into dictionaries
+    variables = {name: json.loads(os.getenv(name)) for name in variable_names}
+    # Unpack variables for individual use (optional)
+    LEUKOCYTES, NITRITE, UROBILINOGEN, PROTEIN, PH, BLOOD, GRAVITY, KETONE, BILIRUBIN, GLUCOSE = variables.values()
     for index in test_indices:
         urine_color = urine_colors[index]
         if index == "Leukocytes":
-            result[index] = find_closest_color_cie(urine_color, {"NEGATIVE": [254, 248, 188],
-                                                             "TRACE(15)": [229, 218, 174],
-                                                             "SMALL(75)": [206, 157, 149],
-                                                             "MODERATE(125)": [166, 120, 153],
-                                                             "LARGE(500)": [110, 83, 124]})
+            result[index] = find_closest_color_cie(urine_color, LEUKOCYTES)
         elif index == "Nitrite":
-            result[index] = find_closest_color_cie(urine_color, {"NEGATIVE": [253, 250, 222],
-                                                             "POSITIVE1": [251, 220, 218],
-                                                             "POSITIVE2": [247, 181, 200],
-                                                             "POSITIVE3": [238, 78, 130]})
+            result[index] = find_closest_color_cie(urine_color, NITRITE)
         elif index == "Urobilinogen":
-            result[index] = find_closest_color_cie(urine_color, {"NORMAL(32)": [254, 211, 174],
-                                                             "NORMAL(16)": [248, 168, 133],
-                                                             "32": [243, 131, 140],
-                                                             "64": [230, 111, 128],
-                                                             "128": [230, 78, 130]})
+            result[index] = find_closest_color_cie(urine_color, UROBILINOGEN)
         elif index == "Protein":
-            result[index] = find_closest_color_cie(urine_color, {"NEGATIVE": [222, 229, 125],
-                                                             "TRACE": [187, 215, 106],
-                                                             "0.3": [172, 212, 130],
-                                                             "1.0": [119, 189, 151],
-                                                             "3.0": [94, 178, 169],
-                                                             ">=20": [0, 148, 149]})
+            result[index] = find_closest_color_cie(urine_color, PROTEIN)
         elif index == "pH":
-            result[index] = find_closest_color_cie(urine_color, {"5.0": [245, 139, 79],
-                                                             "6.0": [249, 165, 85],
-                                                             "6.5": [253, 195, 109],
-                                                             "7.0": [208, 189, 98],
-                                                             "7.5": [136, 148, 85],
-                                                             "8.0": [86, 173, 145],
-                                                             "8.5": [0, 127, 129]})
+            result[index] = find_closest_color_cie(urine_color, PH)
         elif index == "Blood":
-            result[index] = find_closest_color_cie(urine_color, {"NEGATIVE": [250, 174, 76],
-                                                             "TRACE(NON-HEMOLYZED)": [250, 284, 77],
-                                                             "TRACE(10)": [207, 161, 65],
-                                                             "SMALL(25)": [161, 156, 84],
-                                                             "MODERATE(80)": [116, 156, 122],
-                                                             "LARGE(200)": [69, 128, 108]})
+            result[index] = find_closest_color_cie(urine_color, BLOOD)
         elif index == "Specific":
-            result[index] = find_closest_color_cie(urine_color, {"1.000": [2, 113, 126],
-                                                             "1.005": [76, 117, 102],
-                                                             "1.010": [123, 136, 105],
-                                                             "1.015": [155, 141, 58],
-                                                             "1.020": [175, 161, 52],
-                                                             "1.025": [197, 167, 48],
-                                                             "1.030": [210, 171, 43]})
+            result[index] = find_closest_color_cie(urine_color, GRAVITY)
         elif index == "Ketone":
-            result[index] = find_closest_color_cie(urine_color, {"NEGATIVE": [251, 188, 149],
-                                                             "TRACE(0.5)": [246, 158, 137],
-                                                             "SMALL(1.5)": [243, 131, 140],
-                                                             "MODERATE(4.0)": [201, 88, 116],
-                                                             "LARGE1(8.0)": [150, 58, 102],
-                                                             "LARGE2(16.0)": [120, 41, 90]})
+            result[index] = find_closest_color_cie(urine_color, KETONE)
         elif index == "Bilirubin":
-            result[index] = find_closest_color_cie(urine_color, {"NEGATIVE1": [253, 250, 222],
-                                                             "NEGATIVE2": [253, 223, 144],
-                                                             "SMALL(17)": [251, 187, 131],
-                                                             "MODERATE(50)": [208, 146, 136],
-                                                             "LARGE(100)": [171, 127, 131]})
+            result[index] = find_closest_color_cie(urine_color, BILIRUBIN)
         elif index == "Glucose":
-            result[index] = find_closest_color_cie(urine_color, {"NEGATIVE1": [111, 203, 220],
-                                                             "NEGATIVE2": [141, 208, 187],
-                                                             "TRACE(5)": [152, 207, 148],
-                                                             "15": [139, 171, 106],
-                                                             "30": [164, 129, 67],
-                                                             "60": [157, 105, 37],
-                                                             "110": [136, 89, 41]})
-
+            result[index] = find_closest_color_cie(urine_color, GLUCOSE)
     return result
 def analyze_urine_test_svm(urine_colors):
     result = {}
 
     def find_closest_color_svm(target, file_path, rgb_value):
-        # Importing the datasets
-        print('aaa', file_path)
         datasets = pd.read_csv(file_path)
         X = datasets.iloc[:, [0,1,2]].values
         Y = datasets.iloc[:, 3].values
@@ -443,77 +318,225 @@ def analyze_urine_test_svm(urine_colors):
             result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
 
     return result
+def connect_to_dynamodb():
+    aws_access_key_id = os.getenv('AWS_ACCESS_KEY_ID')
+    aws_secret_access_key = os.getenv('AWS_SECRET_ACCESS_KEY')
+    aws_region = os.getenv('AWS_REGION')
 
-@app.post("/process_image_L2distance/")
-async def process_image(file: UploadFile = File(...)):
-    contents = await file.read()
+    dynamodb = boto3.resource('dynamodb',
+                              aws_access_key_id=aws_access_key_id,
+                              aws_secret_access_key=aws_secret_access_key,
+                              region_name=aws_region)
 
-    # Tạo tệp tạm thời và ghi nội dung hình ảnh vào đó
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_image:
-        temp_image_path = temp_image.name
-        temp_image.write(contents)
-
-    # Xử lý hình ảnh với mô hình và trả về màu của nước tiểu
-    img_visualized, urine_colors = process_image_with_model(temp_image_path)
-    image_pil = Image.fromarray(img_visualized)  # Chuyển đổi numpy array thành đối tượng Image
-    buffered = io.BytesIO()
-    image_pil.save(buffered, format="PNG")
-    image_bytes = buffered.getvalue()
-    # Encode bytes as base64
-    base64_image = base64.b64encode(image_bytes).decode('utf-8')
-    result = analyze_urine_test_svm(urine_colors)
-
-    # Xóa hình ảnh tạm thời sau khi đã xử lý
-    os.remove(temp_image_path)
-    responce = {"img_base64":base64_image}
-    result["img_base64"] = base64_image
-    response = result
-    return response
+    # Chọn bảng DynamoDB để làm việc
+    table = dynamodb.Table('dev-db-buddycloud-detailresults')
+    return dynamodb, table
 @app.post("/process_image_Ciede2000/")
-async def process_image(file: UploadFile = File(...)):
-    contents = await file.read()
-
-    # Tạo tệp tạm thời và ghi nội dung hình ảnh vào đó
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_image:
-        temp_image_path = temp_image.name
-        temp_image.write(contents)
+async def process_image(image_data: ImageData):
+    base64_data = image_data.imageBase64
+    binary_data = base64.b64decode(base64_data)
+    temp_image_path = "file_image_tmp.jpg"
+    image = Image.open(io.BytesIO(binary_data))
+    image.save(temp_image_path)
+    # Lấy thời gian hiện tại và định dạng theo đúng định dạng 'YYYY-MM-DD HH:MM:SS'
+    current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    safe_datetime = current_datetime.replace(':', '_').replace(' ', '_')
+    # Load hình ảnh từ đường dẫn tệp tin
+    image1 = Image.open(temp_image_path)
+    # Đường dẫn thư mục để lưu hình ảnh
+    folder_path = 'images'
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+    image_filename = rf'{safe_datetime}.png'
+    saved_image_path = os.path.join(folder_path, image_filename)
+    print('saved_image_path', saved_image_path)
+    # Lưu hình ảnh
+    image1.save(saved_image_path, format="PNG")
 
     # Xử lý hình ảnh với mô hình và trả về màu của nước tiểu
     img_visualized, urine_colors = process_image_with_model(temp_image_path)
-    image_pil = Image.fromarray(img_visualized)  # Chuyển đổi numpy array thành đối tượng Image
-    buffered = io.BytesIO()
-    image_pil.save(buffered, format="PNG")
-    image_bytes = buffered.getvalue()
-    # Encode bytes as base64
-    base64_image = base64.b64encode(image_bytes).decode('utf-8')
-    result = analyze_urine_test_svm(urine_colors)
+    result = analyze_urine_test_cie(urine_colors)
+    image = img_visualized
+    # Đường dẫn thư mục để lưu hình ảnh
+    folder1_path = 'detectedImageURL'
+    if not os.path.exists(folder1_path):
+        os.makedirs(folder1_path)
+    image_filename = rf'{safe_datetime}.png'
+    saved_image_path1 = os.path.join(folder1_path, image_filename)
+    # Lưu hình ảnh
+    cv2.imwrite(saved_image_path1,image)
+    # Kiểm tra sự tồn tại của userName
+    # if check_username(image_data.userName):
+    #     return {"error": "Tên người dùng đã tồn tại. Vui lòng chọn một tên người dùng khác."}
+    dynamodb, table = connect_to_dynamodb()
+    # Thực hiện phép quét (scan) để lấy số lượng mục trong bảng
+    response = table.scan(Select='COUNT')
+    # Lấy số lượng mục hiện có trong bảng
+    item_count = response['Count']
+    # Nếu không có mục nào trong bảng, ID_counter sẽ được khởi tạo là 1, ngược lại sẽ là số lượng mục hiện có + 1
+    ID_counter = 1 if item_count == 0 else item_count + 1
+    userID = str(ID_counter) + image_data.userName
+    # Thêm mục mới vào bảng
+    table.put_item(
+        Item={
+            "ID": str(ID_counter),
+            "userID": str(userID),
+            "userName": image_data.userName,
+            "petName": image_data.petName,
+            "petID": str(ID_counter),
+            "userPhoneNumber": image_data.userPhoneNumber,
+            "userEmail": image_data.userEmail,
+            "timestamp": current_datetime,
+            "resultsID": str(ID_counter),
+            "resultsDetail": result,
+            "rawImageURL": saved_image_path,
+            "detectedImageURL": saved_image_path1
+        }
+    )
+    ID_counter +=1
     # Xóa hình ảnh tạm thời sau khi đã xử lý
-    os.remove(temp_image_path)
-    responce = {"img_base64":base64_image}
-    result["img_base64"] = base64_image
-    response = result
-    return response
+    #os.remove(temp_image_path)
+    # Tạo hình ảnh từ mảng Numpy
+    cv2_rgb = cv2.cvtColor(img_visualized, cv2.COLOR_BGR2RGB)
+    image = Image.fromarray(cv2_rgb)
+    # Tạo chuỗi base64 từ hình ảnh
+    buffer = io.BytesIO()
+    image.save(buffer, format='JPEG')
+    base64_image = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    result['base_64']=base64_image
+    return result
 @app.post("/process_image_SVM/")
-async def process_image(file: UploadFile = File(...)):
-    contents = await file.read()
-
-    # Tạo tệp tạm thời và ghi nội dung hình ảnh vào đó
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".jpg") as temp_image:
-        temp_image_path = temp_image.name
-        temp_image.write(contents)
+async def process_image(image_data: ImageData):
+    base64_data = image_data.imageBase64
+    binary_data = base64.b64decode(base64_data)
+    temp_image_path = "file_image_tmp.jpg"
+    image = Image.open(io.BytesIO(binary_data))
+    image.save(temp_image_path)
+    # Lấy thời gian hiện tại và định dạng theo đúng định dạng 'YYYY-MM-DD HH:MM:SS'
+    current_datetime = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    safe_datetime = current_datetime.replace(':', '_').replace(' ', '_')
+    # Load hình ảnh từ đường dẫn tệp tin
+    image1 = Image.open(temp_image_path)
+    # Đường dẫn thư mục để lưu hình ảnh
+    folder_path = 'images'
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+    image_filename = rf'{safe_datetime}.png'
+    saved_image_path = os.path.join(folder_path, image_filename)
+    print('saved_image_path', saved_image_path)
+    # Lưu hình ảnh
+    image1.save(saved_image_path, format="PNG")
 
     # Xử lý hình ảnh với mô hình và trả về màu của nước tiểu
     img_visualized, urine_colors = process_image_with_model(temp_image_path)
-    image_pil = Image.fromarray(img_visualized)  # Chuyển đổi numpy array thành đối tượng Image
-    buffered = io.BytesIO()
-    image_pil.save(buffered, format="PNG")
-    image_bytes = buffered.getvalue()
-    # Encode bytes as base64
-    base64_image = base64.b64encode(image_bytes).decode('utf-8')
     result = analyze_urine_test_svm(urine_colors)
-    # Xóa hình ảnh tạm thời sau khi đã xử lý
-    os.remove(temp_image_path)
-    responce = {"img_base64":base64_image}
-    result["img_base64"] = base64_image
-    response = result
-    return response
+    image = img_visualized
+    # Đường dẫn thư mục để lưu hình ảnh
+    folder1_path = 'detectedImageURL'
+    if not os.path.exists(folder1_path):
+        os.makedirs(folder1_path)
+    image_filename = rf'{safe_datetime}.png'
+    saved_image_path1 = os.path.join(folder1_path, image_filename)
+    # Lưu hình ảnh
+    cv2.imwrite(saved_image_path1,image)
+    # Kiểm tra sự tồn tại của userName
+    # if check_username(image_data.userName):
+    #     return {"error": "Tên người dùng đã tồn tại. Vui lòng chọn một tên người dùng khác."}
+    dynamodb, table = connect_to_dynamodb()
+    # Thực hiện phép quét (scan) để lấy số lượng mục trong bảng
+    response = table.scan(Select='COUNT')
+    # Lấy số lượng mục hiện có trong bảng
+    item_count = response['Count']
+    # Nếu không có mục nào trong bảng, ID_counter sẽ được khởi tạo là 1, ngược lại sẽ là số lượng mục hiện có + 1
+    ID_counter = 1 if item_count == 0 else item_count + 1
+    userID = str(ID_counter) + image_data.userName
+    # Thêm mục mới vào bảng
+    table.put_item(
+        Item={
+            "ID": str(ID_counter),
+            "userID": str(userID),
+            "userName": image_data.userName,
+            "petName": image_data.petName,
+            "petID": str(ID_counter),
+            "userPhoneNumber": image_data.userPhoneNumber,
+            "userEmail": image_data.userEmail,
+            "timestamp": current_datetime,
+            "resultsID": str(ID_counter),
+            "resultsDetail": result,
+            "rawImageURL": saved_image_path,
+            "detectedImageURL": saved_image_path1
+        }
+    )
+    ID_counter +=1
+    # Tạo hình ảnh từ mảng Numpy
+    cv2_rgb = cv2.cvtColor(img_visualized, cv2.COLOR_BGR2RGB)
+    image = Image.fromarray(cv2_rgb)
+    # Tạo chuỗi base64 từ hình ảnh
+    buffer = io.BytesIO()
+    image.save(buffer, format='JPEG')
+    base64_image = base64.b64encode(buffer.getvalue()).decode('utf-8')
+    result['base_64']=base64_image
+    return result
+
+@app.post("/item/{id}/{timestamp}")
+async def read_item(id: str, timestamp: str):
+    try:
+        dynamodb, table = connect_to_dynamodb()
+        # Truy vấn dữ liệu từ bảng
+        response = table.get_item(
+            Key={
+                'ID': id,
+                'timestamp': timestamp
+            }
+        )
+        item = response['Item']  # Thay đổi ở đây
+
+        # Kiểm tra xem item có tồn tại hay không
+        if not item:
+            raise HTTPException(status_code=404, detail="Item not found")
+
+        return item
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/update_dynamodb_item")
+async def update_dynamodb_item(item_id: str, timestamp: str, userPhoneNumber: str, detectedImageURL: str, petID: str, petName: str, rawImageURL: str, userID: str, resultsDetail: str, userEmail: str, userName: str, resultsID: str):
+
+    # Cập nhật mục trong bảng
+    try:
+        dynamodb, table = connect_to_dynamodb()
+        response = table.update_item(
+            Key={
+                'ID': item_id,
+                'timestamp': timestamp
+            },
+            UpdateExpression='SET userPhoneNumber = :val1, detectedImageURL = :val2, petName = :val3, userEmail = :val4, userName = :val5, petID = :val6, rawImageURL = :val7, userID = :val8, resultsDetail = :val9, resultsID = :val10',
+            ExpressionAttributeValues={
+                ':val1': userPhoneNumber,
+                ':val2': detectedImageURL,
+                ':val3': petName,
+                ':val4': userEmail,
+                ':val5': userName,
+                ':val6': petID,
+                ':val7': rawImageURL,
+                ':val8': userID,
+                ':val9': resultsDetail,
+                ':val10': resultsID
+            }
+        )
+        return {"message": "Cập nhật thành công!", "response": response}
+    except Exception as e:
+        return {"error": f"Lỗi khi cập nhật mục trong bảng: {e}"}
+@app.post("/items/{item_id}")
+async def delete_item(item_id: str, timestamp: str):
+    try:
+        dynamodb, table = connect_to_dynamodb()
+        response = table.delete_item(
+            Key={
+                'ID': item_id,
+                'timestamp': timestamp
+            }
+        )
+        return {"message": "Item deleted successfully", "response": response}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

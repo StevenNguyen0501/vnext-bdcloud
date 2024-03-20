@@ -7,3 +7,5 @@ ultralytics  # This might not be the correct package name; adjust based on where
 pandas
 scikit-learn
 boto3
+python-dotenv
+requests
