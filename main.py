@@ -566,7 +566,7 @@ async def update_dynamodb_item(item_id: str, timestamp: str, userPhoneNumber: st
 @app.post("/items/{item_id}")
 async def delete_item(item_id: str, timestamp: str):
     try:
-        dynamodb, table = connect_to_dynamodb()
+        _, table = connect_to_dynamodb()
         response = table.delete_item(
             Key={
                 'ID': item_id,
