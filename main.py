@@ -214,8 +214,16 @@ def analyze_urine_test_cie(urine_colors):
 
       return closest_color
 
-    test_indices = ['Bilirubin','Blood','Glucose','Ketone','Leukocytes','Nitrite','Protein','Specific','Urobilinogen','pH']
-
+    test_indices = class_names.values()
+    # List of variable names
+    variable_names = [
+        "LEUKOCYTES", "NITRITE", "UROBILINOGEN", "PROTEIN", "PH",
+        "BLOOD", "GRAVITY", "KETONE", "BILIRUBIN", "GLUCOSE"
+    ]
+    # Deserialize environment variables into dictionaries
+    variables = {name: json.loads(os.getenv(name)) for name in variable_names}
+    # Unpack variables for individual use (optional)
+    LEUKOCYTES, NITRITE, UROBILINOGEN, PROTEIN, PH, BLOOD, GRAVITY, KETONE, BILIRUBIN, GLUCOSE = variables.values()
     for index in test_indices:
         urine_color = urine_colors[index]
         if index == "Leukocytes":
@@ -321,28 +329,29 @@ def analyze_urine_test_svm(urine_colors):
         return predicted_class[0]  #closest_color
     path_svm = 'data_SVM/'
     test_indices = ['Bilirubin','Blood','Glucose','Ketone','Leukocytes','Nitrite','Protein','Specific','Urobilinogen','pH']
+    path_data_svm = "data_SVM"
     for index in test_indices:
         urine_color = urine_colors[index]
         if index == "Leukocytes":
-            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
+            result[index] = find_closest_color_svm(urine_color, f"{path_data_svm}/{index}.csv", urine_color)
         elif index == "Nitrite":
-            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
+            result[index] = find_closest_color_svm(urine_color, f"{path_data_svm}/{index}.csv", urine_color)
         elif index == "Urobilinogen":
-            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
+            result[index] = find_closest_color_svm(urine_color, f"{path_data_svm}/{index}.csv", urine_color)
         elif index == "Protein":
-            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
+            result[index] = find_closest_color_svm(urine_color, f"{path_data_svm}/{index}.csv", urine_color)
         elif index == "pH":
-            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
+            result[index] = find_closest_color_svm(urine_color, f"{path_data_svm}/{index}.csv", urine_color)
         elif index == "Blood":
-            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
+            result[index] = find_closest_color_svm(urine_color, f"{path_data_svm}/{index}.csv", urine_color)
         elif index == "Specific":
-            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
+            result[index] = find_closest_color_svm(urine_color, f"{path_data_svm}/{index}.csv", urine_color)
         elif index == "Ketone":
-            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
+            result[index] = find_closest_color_svm(urine_color, f"{path_data_svm}/{index}.csv", urine_color)
         elif index == "Bilirubin":
-            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
+            result[index] = find_closest_color_svm(urine_color, f"{path_data_svm}/{index}.csv", urine_color)
         elif index == "Glucose":
-            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
+            result[index] = find_closest_color_svm(urine_color, f"{path_data_svm}/{index}.csv", urine_color)
 
     return result
 def connect_to_dynamodb():
