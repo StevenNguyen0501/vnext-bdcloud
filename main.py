@@ -13,7 +13,6 @@ import boto3
 from datetime import datetime
 from http.client import HTTPException
 from dotenv import load_dotenv, dotenv_values
-import json
 
 load_dotenv()
 app = FastAPI()
@@ -208,7 +207,7 @@ def analyze_urine_test_cie(urine_colors):
       closest_color = None
 
       for key, value in color_dict.items():
-          distance = CIEDE2000(rgb2lab(target), rgb2lab(value)) #sum((a - b) ** 2 for a, b in zip(target, value))
+          distance = CIEDE2000(rgb2lab(target), rgb2lab(value))
           if distance < min_distance:
               min_distance = distance
               closest_color = key
@@ -216,53 +215,90 @@ def analyze_urine_test_cie(urine_colors):
       return closest_color
 
     test_indices = ['Bilirubin','Blood','Glucose','Ketone','Leukocytes','Nitrite','Protein','Specific','Urobilinogen','pH']
-    # List of variable names
-    variable_names = [
-        "LEUKOCYTES", "NITRITE", "UROBILINOGEN", "PROTEIN", "PH",
-        "BLOOD", "GRAVITY", "KETONE", "BILIRUBIN", "GLUCOSE"
-    ]
-    # Deserialize environment variables into dictionaries
-    variables = {name: json.loads(os.getenv(name)) for name in variable_names}
-    # Unpack variables for individual use (optional)
-    LEUKOCYTES, NITRITE, UROBILINOGEN, PROTEIN, PH, BLOOD, GRAVITY, KETONE, BILIRUBIN, GLUCOSE = variables.values()
+
     for index in test_indices:
         urine_color = urine_colors[index]
         if index == "Leukocytes":
-            result[index] = find_closest_color_cie(urine_color, LEUKOCYTES)
+            result[index] = find_closest_color_cie(urine_color, {"NEGATIVE": [254, 248, 188],
+                                                             "TRACE(15)": [229, 218, 174],
+                                                             "SMALL(75)": [206, 157, 149],
+                                                             "MODERATE(125)": [166, 120, 153],
+                                                             "LARGE(500)": [110, 83, 124]})
         elif index == "Nitrite":
-            result[index] = find_closest_color_cie(urine_color, NITRITE)
+            result[index] = find_closest_color_cie(urine_color, {"NEGATIVE": [253, 250, 222],
+                                                             "POSITIVE1": [251, 220, 218],
+                                                             "POSITIVE2": [247, 181, 200],
+                                                             "POSITIVE3": [238, 78, 130]})
         elif index == "Urobilinogen":
-            result[index] = find_closest_color_cie(urine_color, UROBILINOGEN)
+            result[index] = find_closest_color_cie(urine_color, {"NORMAL(32)": [254, 211, 174],
+                                                             "NORMAL(16)": [248, 168, 133],
+                                                             "32": [243, 131, 140],
+                                                             "64": [230, 111, 128],
+                                                             "128": [230, 78, 130]})
         elif index == "Protein":
-            result[index] = find_closest_color_cie(urine_color, PROTEIN)
+            result[index] = find_closest_color_cie(urine_color, {"NEGATIVE": [222, 229, 125],
+                                                             "TRACE": [187, 215, 106],
+                                                             "0.3": [172, 212, 130],
+                                                             "1.0": [119, 189, 151],
+                                                             "3.0": [94, 178, 169],
+                                                             ">=20": [0, 148, 149]})
         elif index == "pH":
-            result[index] = find_closest_color_cie(urine_color, PH)
+            result[index] = find_closest_color_cie(urine_color, {"5.0": [245, 139, 79],
+                                                             "6.0": [249, 165, 85],
+                                                             "6.5": [253, 195, 109],
+                                                             "7.0": [208, 189, 98],
+                                                             "7.5": [136, 148, 85],
+                                                             "8.0": [86, 173, 145],
+                                                             "8.5": [0, 127, 129]})
         elif index == "Blood":
-            result[index] = find_closest_color_cie(urine_color, BLOOD)
+            result[index] = find_closest_color_cie(urine_color, {"NEGATIVE": [250, 174, 76],
+                                                             "TRACE(NON-HEMOLYZED)": [250, 284, 77],
+                                                             "TRACE(10)": [207, 161, 65],
+                                                             "SMALL(25)": [161, 156, 84],
+                                                             "MODERATE(80)": [116, 156, 122],
+                                                             "LARGE(200)": [69, 128, 108]})
         elif index == "Specific":
-            result[index] = find_closest_color_cie(urine_color, GRAVITY)
+            result[index] = find_closest_color_cie(urine_color, {"1.000": [2, 113, 126],
+                                                             "1.005": [76, 117, 102],
+                                                             "1.010": [123, 136, 105],
+                                                             "1.015": [155, 141, 58],
+                                                             "1.020": [175, 161, 52],
+                                                             "1.025": [197, 167, 48],
+                                                             "1.030": [210, 171, 43]})
         elif index == "Ketone":
-            result[index] = find_closest_color_cie(urine_color, KETONE)
+            result[index] = find_closest_color_cie(urine_color, {"NEGATIVE": [251, 188, 149],
+                                                             "TRACE(0.5)": [246, 158, 137],
+                                                             "SMALL(1.5)": [243, 131, 140],
+                                                             "MODERATE(4.0)": [201, 88, 116],
+                                                             "LARGE1(8.0)": [150, 58, 102],
+                                                             "LARGE2(16.0)": [120, 41, 90]})
         elif index == "Bilirubin":
-            result[index] = find_closest_color_cie(urine_color, BILIRUBIN)
+            result[index] = find_closest_color_cie(urine_color, {"NEGATIVE1": [253, 250, 222],
+                                                             "NEGATIVE2": [253, 223, 144],
+                                                             "SMALL(17)": [251, 187, 131],
+                                                             "MODERATE(50)": [208, 146, 136],
+                                                             "LARGE(100)": [171, 127, 131]})
         elif index == "Glucose":
-            result[index] = find_closest_color_cie(urine_color, GLUCOSE)
+            result[index] = find_closest_color_cie(urine_color, {"NEGATIVE1": [111, 203, 220],
+                                                             "NEGATIVE2": [141, 208, 187],
+                                                             "TRACE(5)": [152, 207, 148],
+                                                             "15": [139, 171, 106],
+                                                             "30": [164, 129, 67],
+                                                             "60": [157, 105, 37],
+                                                             "110": [136, 89, 41]})
+
     return result
 def analyze_urine_test_svm(urine_colors):
     result = {}
-
     def find_closest_color_svm(target, file_path, rgb_value):
+        # Importing the datasets
         datasets = pd.read_csv(file_path)
         X = datasets.iloc[:, [0,1,2]].values
         Y = datasets.iloc[:, 3].values
-
         # Splitting the dataset into the Training set and Test set
-
         from sklearn.model_selection import train_test_split
         X_Train, X_Test, Y_Train, Y_Test = train_test_split(X, Y, test_size = 0.25, random_state = 0)
-
         # Feature Scaling
-
         from sklearn.preprocessing import StandardScaler
         sc_X = StandardScaler()
         X_Train = sc_X.fit_transform(X_Train)
@@ -270,52 +306,43 @@ def analyze_urine_test_svm(urine_colors):
         # Fitting the classifier into the Training set
         from sklearn.svm import SVC
         classifier = SVC(kernel = 'linear', random_state = 0)
-        # print(X_Train)
-        # print(Y_Train)
         classifier.fit(X_Train, Y_Train)
-
         # Predicting the test set results
-
         Y_Pred = classifier.predict(X_Test)
-
         # Making the Confusion Matrix
-
         from sklearn.metrics import confusion_matrix
         cm = confusion_matrix(Y_Test, Y_Pred)
-
         # Chuẩn bị input mới
         new_input = [rgb_value]  # Tạo input mới từ dữ liệu bạn cung cấp
-
         # Tiêu chuẩn hóa input mới
         new_input_scaled = sc_X.transform(new_input)
-
         # Dự đoán kết quả cho input mới
         predicted_class = classifier.predict(new_input_scaled)
         return predicted_class[0]  #closest_color
-
+    path_svm = 'data_SVM/'
     test_indices = ['Bilirubin','Blood','Glucose','Ketone','Leukocytes','Nitrite','Protein','Specific','Urobilinogen','pH']
     for index in test_indices:
         urine_color = urine_colors[index]
         if index == "Leukocytes":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
         elif index == "Nitrite":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
         elif index == "Urobilinogen":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
         elif index == "Protein":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
         elif index == "pH":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
         elif index == "Blood":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
         elif index == "Specific":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
         elif index == "Ketone":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
         elif index == "Bilirubin":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
         elif index == "Glucose":
-            result[index] = find_closest_color_svm(urine_color, f"C:/Users/thinhnp/PycharmProjects/fastAPI_Urine/data_SVM/{index}.csv", urine_color)
+            result[index] = find_closest_color_svm(urine_color, '{}{}.csv'.format(path_svm, index), urine_color)
 
     return result
 def connect_to_dynamodb():
