@@ -327,7 +327,7 @@ def analyze_urine_test_svm(urine_colors):
         # Dự đoán kết quả cho input mới
         predicted_class = classifier.predict(new_input_scaled)
         return predicted_class[0]  #closest_color
-    path_svm = 'data_SVM/'
+
     test_indices = ['Bilirubin','Blood','Glucose','Ketone','Leukocytes','Nitrite','Protein','Specific','Urobilinogen','pH']
     path_data_svm = "data_SVM"
     for index in test_indices:
